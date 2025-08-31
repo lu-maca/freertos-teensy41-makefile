@@ -38,7 +38,7 @@
 #include "arduino_freertos.h"
 #include "semphr.h"
 
-#if _GCC_VERSION >= 60100 && defined PLATFORMIO
+#if _GCC_VERSION >= 60100 && defined ALTERNATIVE_MUTEX_IMPL
 #include "thread_gthread.h"
 #include "condition_variable.h"
 #include "gthr_key.h"
@@ -210,7 +210,7 @@ static inline int __gthread_cond_destroy(__gthread_cond_t*) {
 }
 
 } // extern "C"
-#elif !defined PLATFORMIO
+#elif !defined ALTERNATIVE_MUTEX_IMPL
 #warning "std::thread support not available with Teensyduino."
 #undef _GLIBCXX_HAS_GTHREADS
 #undef __GTHREADS

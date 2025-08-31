@@ -8,11 +8,10 @@ BUILDDIR = $(abspath $(CURDIR)/build)
 TARGET = $(notdir $(CURDIR))
 
 # Toolchain
-TOOLCHAIN_PATH = /usr/local/arm-cortexm-toolchain/arm-cortexm7f-eabi
-CC  = $(TOOLCHAIN_PATH)/../bin/arm-cortexm7f-eabi-gcc
-CXX = $(TOOLCHAIN_PATH)/../bin/arm-cortexm7f-eabi-g++
-OBJCOPY = $(TOOLCHAIN_PATH)/../bin/arm-cortexm7f-eabi-objcopy
-SIZE = $(TOOLCHAIN_PATH)/../bin/arm-cortexm7f-eabi-size
+CC  = arm-none-eabi-gcc
+CXX = arm-none-eabi-g++
+OBJCOPY = arm-none-eabi-objcopy
+SIZE = arm-none-eabi-size
 
 # Teensy paths
 TOOLSPATH = $(CURDIR)/tools
@@ -27,16 +26,16 @@ CPUOPTIONS = -mcpu=cortex-m7 -mfloat-abi=hard -mfpu=fpv5-d16 -mthumb
 CPPFLAGS = -Wall -g -O2 $(CPUOPTIONS) -MMD $(OPTIONS) \
            -Isrc -I$(COREPATH) -ffunction-sections -fdata-sections
 
-CXXFLAGS = -c -O2 -g -Wall -MMD -std=c++20 -fno-exceptions -fpermissive \
+CXXFLAGS = -c -O2 -g -Wall -MMD -std=gnu++20 -fno-exceptions -fpermissive \
            -fno-rtti -fno-threadsafe-statics -felide-constructors -Wno-error=narrowing -mthumb \
-		   -DPLATFORMIO # this is important, if not it does not compile
+		   -specs=nano.specs -DALTERNATIVE_MUTEX_IMPL
 
 CFLAGS = -std=gnu99 -c -O2 -g -Wall -ffunction-sections -fdata-sections -MMD -mthumb
 
 # Linker
 LD_PATH = $(COREPATH)/$(MCU_LD)
-LDFLAGS = -Os -Wl,--gc-sections,--relax $(SPECS) $(CPUOPTIONS) -T$(LD_PATH)
-LIBS = -lm -lstdc++
+LDFLAGS = -Os -Wl,--gc-sections,--relax $(SPECS) $(CPUOPTIONS) -T$(LD_PATH) -specs=nano.specs
+LIBS = -lm -lstdc++ 
 
 # ----------------------------------------------------------------------
 # Source files
@@ -54,13 +53,10 @@ CPP_FILES  := $(wildcard src/*.cpp)
 # ----------------------------------------------------------------------
 # Include paths
 # ----------------------------------------------------------------------
-TOOLCHAIN_INC_CPP = $(TOOLCHAIN_PATH)/include/c++/13.2.0
-TOOLCHAIN_INC_C   = $(TOOLCHAIN_PATH)/arm-cortexm7f-eabi/include
 FREERTOS_CPP_INC  = libs/freertos/lib/cpp/include
 
-L_INC := -I$(FREERTOS_CPP_INC) \
-         $(foreach lib,$(SUBDIRS),-I$(lib) -I$(lib)/src) \
-		 -I$(COREPATH) -I$(LIBRARYPATH) -Isrc -Ilibs/freertos/lib/cpp/include
+L_INC := $(foreach lib,$(SUBDIRS),-I$(lib) -I$(lib)/src) \
+		 -I$(COREPATH) -I$(LIBRARYPATH) -Isrc -I$(FREERTOS_CPP_INC)
 
 # ----------------------------------------------------------------------
 # Build objects
@@ -95,12 +91,12 @@ upload: $(TARGET).hex
 $(BUILDDIR)/%.o: %.c
 	@echo -e "[CC]\t$<"
 	@mkdir -p "$(dir $@)"
-	@$(CC) $(CPPFLAGS) $(CFLAGS) $(L_INC) -o "$@" -c "$<"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(L_INC) -o "$@" -c "$<" 
 
 $(BUILDDIR)/%.o: %.cpp
 	@echo -e "[CXX]\t$<"
 	@mkdir -p "$(dir $@)"
-	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(L_INC) -o "$@" -c "$<"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(L_INC) -o "$@" -c "$<"
 
 # ----------------------------------------------------------------------
 # Linking

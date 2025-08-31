@@ -350,7 +350,7 @@ FLASHMEM void vApplicationGetTimerTaskMemory(StaticTask_t** ppxTimerTaskTCBBuffe
 #endif // configUSE_TIMERS
 #endif // configSUPPORT_STATIC_ALLOCATION
 
-#if defined PLATFORMIO || TEENSYDUINO >= 158
+#if defined ALTERNATIVE_MUTEX_IMPL || TEENSYDUINO >= 158
 #if configUSE_MALLOC_FAILED_HOOK == 1
 FLASHMEM void vApplicationMallocFailedHook() {
     freertos::error_blink(2);
@@ -399,7 +399,7 @@ void* sbrk(ptrdiff_t incr) {
 void* _sbrk(ptrdiff_t incr) {
     return sbrk(incr);
 };
-#endif // PLATFORMIO || TEENSYDUINO >= 158
+#endif // ALTERNATIVE_MUTEX_IMPL || TEENSYDUINO >= 158
 
 FLASHMEM int _gettimeofday(timeval* tv, void*) {
     const auto p_offset { freertos::clock::get_offset() };

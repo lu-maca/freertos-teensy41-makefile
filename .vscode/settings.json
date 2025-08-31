@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "array": "cpp",
+        "deque": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "vector": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "ranges": "cpp",
+        "span": "cpp",
+        "thread": "cpp",
+        "condition_variable": "cpp",
+        "socket": "cpp",
+        "mutex": "cpp",
+        "shared_mutex": "cpp",
+        "stacktrace": "cpp"
+    }
+}
