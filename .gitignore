@@ -1,2 +1,6 @@
 build/
 *.elf
+build_current
+.waf*
+.lock*
+
