@@ -1,73 +1,201 @@
-#!/usr/bin/env python3
-# encoding: utf-8
+#!/usr/bin/env python
+from waflib import Options, Configure, Build
+from waflib import Context
+import os
+import glob
 
+nano_specs = os.popen(
+    'arm-none-eabi-gcc -print-file-name=nano.specs'
+).read().strip()
 
-from waflib import Logs
+# ---------------------------------------------------------------------
+# Options
+# ---------------------------------------------------------------------
+def options(opt):
+    opt.load('compiler_c')
+    opt.load('compiler_cxx')
 
-LIBNAME = "simcore"
+# ---------------------------------------------------------------------
+# Configure
+# ---------------------------------------------------------------------
+def configure(cfg):
+    cfg.load('compiler_c')
+    cfg.load('compiler_cxx')
 
+    cfg.env.CC        = 'arm-none-eabi-gcc'
+    cfg.env.CXX       = 'arm-none-eabi-g++'
+    cfg.env.AR        = 'arm-none-eabi-ar'
+    cfg.env.OBJCOPY   = 'arm-none-eabi-objcopy'
+    cfg.env.SIZE      = 'arm-none-eabi-size'
 
-# ******************************************************************************
-# OPTIONS
-# ******************************************************************************
-def options(ctx):
-    # Load GCC options
-    ctx.load("g++")
-    sc = ctx.add_option_group("SimCore options")
+    # CRITICAL: force linkers
+    cfg.env.LINK_CC   = cfg.env.CC
+    cfg.env.LINK_CXX  = cfg.env.CXX
 
+    cfg.env.MCU = 'IMXRT1062'
+    cfg.env.MCU_DEF = 'ARDUINO_TEENSY41'
+    cfg.env.LDSCRIPT = 'teensy4/imxrt1062_t41.ld'
 
-# ******************************************************************************
-# CONFIGURE
-# ******************************************************************************
-def configure(ctx):
-    Logs.pprint("BLUE", "\nConfiguring...")
-    ctx.load("g++")
+# ---------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------
+def build(bld):
+    TARGET = bld.path.name
 
-    # SETUP BUILD --------------------------------------------------------------
-    # Generate build arguments
-    ctx.env.append_unique("CXXFLAGS", ["-std=c++20", "-Os", "-Wall", "-g", "-pthread"])
+    COREPATH = 'teensy4'
+    LIBPATH  = 'libs'
+    SRCPATH  = 'src'
 
-    # Files
-    ctx.env.append_unique("INCLUDES", [
-        ctx.path.find_dir("simcore/inc/").abspath(), ctx.path.find_dir("simcore/inc/serialprotocol").abspath()
-    ])
-    ctx.env.append_unique("FILES", ["simcore/src/Component.cpp"])
+    FREERTOS_CPP_INC = 'libs/freertos/lib/cpp/include'
 
-    # LIBRARIES ----------------------------------------------------------------
+    # ---------------------------------------------------------------
+    # Compiler flags
+    # ---------------------------------------------------------------
+    cpu_flags = [
+        '-mcpu=cortex-m7',
+        '-mfloat-abi=hard',
+        '-mfpu=fpv5-d16',
+        '-mthumb'
+    ]
 
-    # Add nnxx (nanomsg next gen) library
-    ctx.check_cc(lib="nnxx", mandatory=True)
-    ctx.env.append_unique("LIBS", ["nnxx"])
+    common_defs = [
+        'F_CPU=600000000',
+        'USB_SERIAL',
+        'LAYOUT_US_ENGLISH',
+        'USING_MAKEFILE',
+        '__IMXRT1062__',
+        'ARDUINO=10607',
+        'TEENSYDUINO=159',
+        'ARDUINO_TEENSY41',
+        '__NEWLIB__=1',
+        'ALTERNATIVE_MUTEX_IMPL'
+    ]
 
-    # Add msgpack library
-    ctx.check_cc(lib="msgpack-c", mandatory=True)
-    ctx.env.append_unique("LIBS", ["msgpack-c"])
+    cflags = cpu_flags + [
+        '-std=gnu99',
+        '-Wall',
+        '-O2',
+        '-g',
+        '-ffunction-sections',
+        '-fdata-sections',
+        '--specs=' + nano_specs
+    ]
 
-    # Add reflectcpp library (for msgpack c++)
-    ctx.check_cc(lib="reflectcpp", mandatory=True)
-    ctx.env.append_unique("LIBS", ["reflectcpp"])
+    cxxflags = cpu_flags + [
+        '-std=gnu++20',
+        '-Wall',
+        '-O2',
+        '-g',
+        '-fno-exceptions',
+        '-fno-rtti',
+        '-fno-threadsafe-statics',
+        '-felide-constructors',
+        '-fpermissive',
+        '-Wno-error=narrowing',
+        '--specs=' + nano_specs
+    ]
 
-    # Add spdlog library (logger https://github.com/gabime/spdlog)
-    ctx.check_cc(lib="spdlog", mandatory=True)
-    ctx.env.append_unique("LIBS", ["spdlog"])
+    includes = [
+        SRCPATH,
+        COREPATH,
+        LIBPATH,
+        FREERTOS_CPP_INC
+    ]
 
-    # Add fmt library: spdlog depends on it (https://github.com/fmtlib/fmt)
-    ctx.check_cc(lib="fmt", mandatory=True)
-    ctx.env.append_unique("LIBS", ["fmt"])
+    # Add all library subdirectories
+    for root, dirs, files in os.walk(LIBPATH):
+        if 'example' not in root:
+            includes.append(root)
+            includes.append(os.path.join(root, 'src'))
 
+    # ---------------------------------------------------------------
+    # Source discovery
+    # ---------------------------------------------------------------
+    sources = []
 
-# ******************************************************************************
-# BUILD
-# ******************************************************************************
-def build(ctx):
-    # build libsimcore.a
-    Logs.pprint("BLUE", "\nBuilding lib{}...".format(LIBNAME))
+    for path in [SRCPATH, COREPATH, LIBPATH]:
+        for ext in ('*.c', '*.cpp'):
+            sources += glob.glob(os.path.join(path, '**', ext), recursive=True)
 
-    ctx.stlib(
-        source=ctx.path.ant_glob(ctx.env.FILES),
-        target=LIBNAME,
-        name=LIBNAME,
-        includes=ctx.env.INCLUDES,
-        lib=ctx.env.LIBS,
-        cxxflags=ctx.env.CFLAGS_cshlib,
+    # Filter out examples
+    sources = [s for s in sources if '/example' not in s]
+
+    # ---------------------------------------------------------------
+    # ELF target
+    # ---------------------------------------------------------------
+    elf = bld.program(
+        target   = TARGET,
+        source   = sources,
+        includes = includes,
+        defines  = common_defs,
+        cflags   = cflags,
+        cxxflags = cxxflags,
+        linkflags = cpu_flags + [
+            '-T' + bld.path.find_resource(bld.env.LDSCRIPT).abspath(),
+            '-Wl,--gc-sections,--relax',
+            '--specs=' + nano_specs
+        ],
+        lib = ['m', 'stdc++'],
+        features = 'c cxx'
     )
+
+    # ---------------------------------------------------------------
+    # Post-build: size + hex
+    # ---------------------------------------------------------------
+    def post_build(ctx):
+        if not hasattr(elf, 'link_task'):
+            return
+
+        elf_node = elf.link_task.outputs[0]
+        elf_path = elf_node.abspath()
+        hex_path = elf_path.replace('.elf', '.hex')
+
+        ctx.exec_command(f"{ctx.env.SIZE} {elf_path}")
+        ctx.exec_command(
+            f"{ctx.env.OBJCOPY} -O ihex -R .eeprom {elf_path} {hex_path}"
+        )
+
+
+    bld.add_post_fun(post_build)
+
+
+class reboot(Context.Context):
+    cmd = 'reboot'
+    fun = 'reboot'
+
+    def execute(self):
+        tool = self.path.find_resource('tools/teensy_reboot')
+        if not tool:
+            self.fatal('tools/teensy_reboot not found')
+
+        self.exec_command(tool.abspath())
+
+class upload(Context.Context):
+    cmd = 'upload'
+    fun = 'upload'
+
+    def execute(self):
+        target = os.path.basename(Context.top_dir)
+
+        # HEX path
+        hex_file = os.path.join(
+            Context.out_dir,
+            target
+        )
+
+        if not os.path.isfile(hex_file):
+            self.fatal(f'HEX file not found: {hex_file}')
+
+        # Resolve loader path explicitly (NO self.path)
+        loader = os.path.join(
+            Context.top_dir,
+            'tools',
+            'teensy_loader_cli'
+        )
+
+        if not os.path.isfile(loader):
+            self.fatal('tools/teensy_loader_cli not found')
+
+        self.exec_command(
+            f'{loader} -w -s -v --mcu=TEENSY41 {hex_file}'
+        )
