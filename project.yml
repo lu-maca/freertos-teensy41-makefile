@@ -1,0 +1,19 @@
+library_options:
+    libcsp:
+        with_max_connections       : 20
+        with_conn_queue_length     : 100
+        with_router_queue_length   : 100
+        with_max_bind_port         : 40
+        with_os                    : "freertos"
+        with_rtable                : "cidr"
+        with_padding               : 2
+        enable_crc32               : true
+        enable_xtea                : false
+        enable_hmac                : false
+        enable_dedup               : true
+        enable_if_i2c              : false
+        enable_if_kiss             : true
+        enable_if_can              : false
+        enable_rdp                 : false
+        disable_stlib              : true
+        includes                   : ../../libs/freertos/src

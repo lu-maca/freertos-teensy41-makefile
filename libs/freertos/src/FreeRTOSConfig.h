@@ -162,7 +162,7 @@ extern "C" {
 /* Set configENABLE_BACKWARD_COMPATIBILITY to 1 to map function names and
  * datatypes from old version of FreeRTOS to their latest equivalent.  Defaults
  * to 1 if left undefined. */
-#define configENABLE_BACKWARD_COMPATIBILITY        0
+#define configENABLE_BACKWARD_COMPATIBILITY        1
 
 /* Each task has its own array of pointers that can be used as thread local
  * storage.  configNUM_THREAD_LOCAL_STORAGE_POINTERS set the number of indexes
@@ -412,7 +412,7 @@ PRIORITY THAN THIS! (higher priorities are lower numeric values. */
  * functions introduce a dependency on string formatting functions that would
  * otherwise not exist - hence they are kept separate.  Defaults to 0 if left
  * undefined. */
-#define configUSE_STATS_FORMATTING_FUNCTIONS    0
+#define configUSE_STATS_FORMATTING_FUNCTIONS    1
 
 /* Task aware debugging. */
 #define configRECORD_STACK_HIGH_ADDRESS         1

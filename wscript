@@ -3,17 +3,41 @@ from waflib import Options, Configure, Build
 from waflib import Context
 import os
 import glob
+import yaml
+
 
 nano_specs = os.popen(
     'arm-none-eabi-gcc -print-file-name=nano.specs'
 ).read().strip()
 
+def set_library_opts(opt, lib: dict):
+    for key, val in lib.items():
+        setattr(opt.options, key, val)
+
+    if "includes" in lib:
+        opt.options.includes = lib["includes"]
+
+class Project:
+    yml = None
+
+    @staticmethod
+    def init() -> None:
+        with open("project.yml", "r") as f:
+            Project.yml = yaml.safe_load(f)
+    
 # ---------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------
 def options(opt):
     opt.load('compiler_c')
     opt.load('compiler_cxx')
+    Project.init()
+
+    libs = Project.yml["library_options"]
+    for libname, libopts in libs.items():
+        module_path = os.path.join("libs", libname)
+        if os.path.exists(os.path.join(module_path, "wscript")):
+            opt.recurse(module_path, mandatory=True, once=True)
 
 # ---------------------------------------------------------------------
 # Configure
@@ -35,6 +59,13 @@ def configure(cfg):
     cfg.env.MCU = 'IMXRT1062'
     cfg.env.MCU_DEF = 'ARDUINO_TEENSY41'
     cfg.env.LDSCRIPT = 'teensy4/imxrt1062_t41.ld'
+
+    libs = Project.yml["library_options"]
+    for libname, libopts in libs.items():
+        module_path = os.path.join("libs", libname)
+        if os.path.exists(os.path.join(module_path, "wscript")):
+            set_library_opts(cfg, libopts)
+            cfg.recurse(module_path, mandatory=True, once=True)
 
 # ---------------------------------------------------------------------
 # Build
@@ -81,6 +112,14 @@ def build(bld):
         '--specs=' + nano_specs
     ]
 
+    # for libcsp
+    bld.env.append_value('CFLAGS', [
+        '-mcpu=cortex-m7',
+        '-mfloat-abi=hard',
+        '-mfpu=fpv5-d16',
+        '-mthumb',
+    ])
+
     cxxflags = cpu_flags + [
         '-std=gnu++20',
         '-Wall',
@@ -113,12 +152,19 @@ def build(bld):
     # ---------------------------------------------------------------
     sources = []
 
-    for path in [SRCPATH, COREPATH, LIBPATH]:
+    for path in [SRCPATH, COREPATH, LIBPATH + "/freertos"]:
         for ext in ('*.c', '*.cpp'):
             sources += glob.glob(os.path.join(path, '**', ext), recursive=True)
 
     # Filter out examples
     sources = [s for s in sources if '/example' not in s]
+
+    libs = Project.yml["library_options"]
+    for libname, _ in libs.items():
+        module_path = os.path.join("libs", libname)
+        if os.path.exists(os.path.join(module_path, "wscript")):
+            bld.recurse(module_path, mandatory=True, once=True)
+    
 
     # ---------------------------------------------------------------
     # ELF target
@@ -136,7 +182,8 @@ def build(bld):
             '--specs=' + nano_specs
         ],
         lib = ['m', 'stdc++'],
-        features = 'c cxx'
+        features = 'c cxx',
+        use=["csp"]
     )
 
     # ---------------------------------------------------------------
