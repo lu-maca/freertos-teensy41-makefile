@@ -27,6 +27,7 @@
 extern "C" {
 #include "csp.h"
 #include "csp/arch/csp_thread.h"
+#include "csp/interfaces/csp_if_kiss.h"
 }
 
 
@@ -65,8 +66,31 @@ static void task2(void *) {
   vTaskDelete(nullptr);
 }
 
+// static void serwrite(const uint8_t *aBuf, size_t aLen) {
+//   Serial1.write(aBuf, aLen);
+// }
+
+// static int serread(uint8_t *aBuf, size_t aLen) {
+//   return Serial1.readBytes(aBuf, aLen);
+// }
+
+static void router_thread(void *pvParameter) {
+	(void) pvParameter;
+	for(;;)
+	{
+		(void) csp_route_work(CSP_MAX_DELAY);
+	}
+} 
+
 static void csp_task(void * param) {
-/* Create socket with no specific socket options, e.g. accepts CRC32, HMAC, XTEA, etc. if enabled during compilation */
+  /* we want to use kiss, so we set up the csp_kiss interface */
+  Serial1.begin(115200);
+  // csp_kiss_init2("kiss", serwrite, serread, 4);
+  // /* Setup routing table */
+	// csp_rtable_clear();
+	// csp_rtable_load("7/5 KISS");
+
+  /* Create socket with no specific socket options, e.g. accepts CRC32, HMAC, XTEA, etc. if enabled during compilation */
 	csp_socket_t *sock = csp_socket(CSP_SO_NONE);
 
 	/* Bind socket to all ports, e.g. all incoming connections will be handled here */
@@ -115,6 +139,7 @@ int main() {
   xTaskCreate(task1, "task1", 128, nullptr, 2, nullptr);
   xTaskCreate(task2, "task2", 128, nullptr, 2, nullptr);
   xTaskCreate(csp_task, "CSP", 1024, nullptr, 2, nullptr);
+  xTaskCreate(router_thread, "router", 1024, nullptr, 4, nullptr);
 
   Serial.println(PSTR("setup(): starting scheduler..."));
   Serial.flush();

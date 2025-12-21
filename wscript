@@ -9,6 +9,7 @@ import yaml
 nano_specs = os.popen(
     'arm-none-eabi-gcc -print-file-name=nano.specs'
 ).read().strip()
+nano_specs = f"--specs={nano_specs}"
 
 def set_library_opts(opt, lib: dict):
     for key, val in lib.items():
@@ -34,7 +35,7 @@ def options(opt):
     Project.init()
 
     libs = Project.yml["library_options"]
-    for libname, libopts in libs.items():
+    for libname, _ in libs.items():
         module_path = os.path.join("libs", libname)
         if os.path.exists(os.path.join(module_path, "wscript")):
             opt.recurse(module_path, mandatory=True, once=True)
@@ -66,6 +67,12 @@ def configure(cfg):
         if os.path.exists(os.path.join(module_path, "wscript")):
             set_library_opts(cfg, libopts)
             cfg.recurse(module_path, mandatory=True, once=True)
+    
+    # set flags
+    cfg.env.append_unique("CFLAGS", Project.yml["flags"] + Project.yml["cflags"])
+    cfg.env.append_unique("CXXFLAGS", Project.yml["flags"] + Project.yml["cxxflags"])
+    cfg.env.append_unique("DEFINES", Project.yml["defines"])
+
 
 # ---------------------------------------------------------------------
 # Build
@@ -82,57 +89,6 @@ def build(bld):
     # ---------------------------------------------------------------
     # Compiler flags
     # ---------------------------------------------------------------
-    cpu_flags = [
-        '-mcpu=cortex-m7',
-        '-mfloat-abi=hard',
-        '-mfpu=fpv5-d16',
-        '-mthumb'
-    ]
-
-    common_defs = [
-        'F_CPU=600000000',
-        'USB_SERIAL',
-        'LAYOUT_US_ENGLISH',
-        'USING_MAKEFILE',
-        '__IMXRT1062__',
-        'ARDUINO=10607',
-        'TEENSYDUINO=159',
-        'ARDUINO_TEENSY41',
-        '__NEWLIB__=1',
-        'ALTERNATIVE_MUTEX_IMPL'
-    ]
-
-    cflags = cpu_flags + [
-        '-std=gnu99',
-        '-Wall',
-        '-O2',
-        '-g',
-        '-ffunction-sections',
-        '-fdata-sections',
-        '--specs=' + nano_specs
-    ]
-
-    # for libcsp
-    bld.env.append_value('CFLAGS', [
-        '-mcpu=cortex-m7',
-        '-mfloat-abi=hard',
-        '-mfpu=fpv5-d16',
-        '-mthumb',
-    ])
-
-    cxxflags = cpu_flags + [
-        '-std=gnu++20',
-        '-Wall',
-        '-O2',
-        '-g',
-        '-fno-exceptions',
-        '-fno-rtti',
-        '-fno-threadsafe-statics',
-        '-felide-constructors',
-        '-fpermissive',
-        '-Wno-error=narrowing',
-        '--specs=' + nano_specs
-    ]
 
     includes = [
         SRCPATH,
@@ -142,7 +98,7 @@ def build(bld):
     ]
 
     # Add all library subdirectories
-    for root, dirs, files in os.walk(LIBPATH):
+    for root, _, _ in os.walk(LIBPATH):
         if 'example' not in root:
             includes.append(root)
             includes.append(os.path.join(root, 'src'))
@@ -164,6 +120,7 @@ def build(bld):
         module_path = os.path.join("libs", libname)
         if os.path.exists(os.path.join(module_path, "wscript")):
             bld.recurse(module_path, mandatory=True, once=True)
+            bld.env.append_unique("USES", libname.replace("lib", ""))
     
 
     # ---------------------------------------------------------------
@@ -173,17 +130,17 @@ def build(bld):
         target   = TARGET,
         source   = sources,
         includes = includes,
-        defines  = common_defs,
-        cflags   = cflags,
-        cxxflags = cxxflags,
-        linkflags = cpu_flags + [
+        defines  = bld.env.DEFINES,
+        cflags   = bld.env.CFLAGS,
+        cxxflags = bld.env.CXXFLAGS,
+        linkflags = Project.yml["flags"] + [
             '-T' + bld.path.find_resource(bld.env.LDSCRIPT).abspath(),
             '-Wl,--gc-sections,--relax',
-            '--specs=' + nano_specs
+            nano_specs
         ],
         lib = ['m', 'stdc++'],
         features = 'c cxx',
-        use=["csp"]
+        use=bld.env.USES
     )
 
     # ---------------------------------------------------------------
