@@ -40,6 +40,7 @@ library_options:
         with_os                    : "freertos"
         with_rtable                : "cidr"
         with_padding               : 2
+        with_driver_usart          : teensy
         enable_crc32               : true
         enable_xtea                : false
         enable_hmac                : false
@@ -49,4 +50,5 @@ library_options:
         enable_if_can              : false
         enable_rdp                 : false
         disable_stlib              : true
-        includes                   : ../../libs/freertos/src
+        disable_output             : true
+        includes                   : ../../libs/freertos/src,../../teensy4/
