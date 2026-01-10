@@ -91,8 +91,6 @@ static void csp_task(void *param) {
       switch (csp_conn_dport(conn)) {
       case 10:
         /* Process packet here */
-        teensy_print("something received on port 10");
-
         csp_buffer_free(packet);
         break;
 
@@ -100,8 +98,6 @@ static void csp_task(void *param) {
         /* Call the default CSP service handler, handle pings, buffer use,
         etc.
          */
-        teensy_print("something received on port what?");
-
         csp_service_handler(conn, packet);
         break;
       }

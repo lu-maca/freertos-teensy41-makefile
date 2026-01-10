@@ -6,28 +6,17 @@ static csp_mutex_t serial_mx;
 static csp_mutex_t hw_serial_mx;
 
 int teensy_usart_read(uint8_t *cbuf, const unsigned int length) {
-
+  int out = 0;
   csp_mutex_lock(&hw_serial_mx, 5);
   int available = Serial1.available();
   csp_mutex_unlock(&hw_serial_mx);
-
-  while (available == 0) {
-    // busy wait...
-    vTaskDelay(pdMS_TO_TICKS(5));
-    {
-      csp_mutex_lock(&hw_serial_mx, 5);
-      available = Serial1.available();
-      csp_mutex_unlock(&hw_serial_mx);
-    }
-  }
   
   if ((unsigned int)available <= length) {
     csp_mutex_lock(&hw_serial_mx, 5);
-    const int out = Serial1.readBytes(cbuf, available);
+    out =  Serial1.readBytes(cbuf, available);
     csp_mutex_unlock(&hw_serial_mx);
-    return out;
   }
-  return 0;
+  return out;
 }
 
 void teensy_usart_open(const int baudrate) {
