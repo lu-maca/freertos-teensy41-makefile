@@ -1,23 +1,66 @@
-#include <csp/drivers/usart_teensy.h>
 #include "arduino_freertos.h"
+#include <csp/arch/csp_semaphore.h>
+#include <csp/drivers/usart_teensy.h>
 
+static csp_mutex_t serial_mx;
+static csp_mutex_t hw_serial_mx;
 
-int teensy_usart_read(uint8_t * cbuf, const unsigned int length) {
-    const int available = Serial1.available();
-    if (available <= 400) {
-        return Serial1.readBytes(cbuf, length);
+int teensy_usart_read(uint8_t *cbuf, const unsigned int length) {
+
+  csp_mutex_lock(&hw_serial_mx, 5);
+  int available = Serial1.available();
+  csp_mutex_unlock(&hw_serial_mx);
+
+  while (available == 0) {
+    // busy wait...
+    vTaskDelay(pdMS_TO_TICKS(5));
+    {
+      csp_mutex_lock(&hw_serial_mx, 5);
+      available = Serial1.available();
+      csp_mutex_unlock(&hw_serial_mx);
     }
-    return 0;
+  }
+  
+  if ((unsigned int)available <= length) {
+    csp_mutex_lock(&hw_serial_mx, 5);
+    const int out = Serial1.readBytes(cbuf, available);
+    csp_mutex_unlock(&hw_serial_mx);
+    return out;
+  }
+  return 0;
 }
 
-int teensy_usart_write(const uint8_t * data, const unsigned int data_length) {
-    return Serial1.write(data, data_length);
+void teensy_usart_open(const int baudrate) {
+  Serial1.begin(baudrate);
+  csp_mutex_create(&hw_serial_mx);
 }
 
-void teensy_print(const char* s) {
-    Serial.println(s);
+int teensy_usart_write(const uint8_t *data, const unsigned int data_length) {
+  csp_mutex_lock(&hw_serial_mx, 5);
+  int written = Serial1.write(data, data_length);
+  csp_mutex_unlock(&hw_serial_mx);
+  return written;
+}
+
+void teensy_serial_setup(const unsigned int baud) {
+  Serial.begin(baud);
+  csp_mutex_create(&serial_mx);
+}
+
+void teensy_print(const char *s) {
+  csp_mutex_lock(&serial_mx, 20);
+  Serial.println(s);
+  csp_mutex_unlock(&serial_mx);
+}
+
+void teensy_print_char(const char s) {
+  csp_mutex_lock(&serial_mx, 20);
+  Serial.println(s);
+  csp_mutex_unlock(&serial_mx);
 }
 
 void teensy_print_int(int s) {
-    Serial.println(s);
+  csp_mutex_lock(&serial_mx, 20);
+  Serial.println(s, arduino::DEC);
+  csp_mutex_unlock(&serial_mx);
 }

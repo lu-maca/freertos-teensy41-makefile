@@ -29,6 +29,7 @@ extern "C" {
 #include "csp/arch/csp_thread.h"
 #include "csp/drivers/usart.h"
 #include "csp/interfaces/csp_if_kiss.h"
+#include "csp/drivers/usart_teensy.h"
 }
 
 static void task1(void *) {
@@ -45,13 +46,10 @@ static void task1(void *) {
 }
 
 static void csp_task(void *param) {
-  Serial.begin(115200);
-
   /* we want to use kiss, so we set up the csp_kiss interface */
-  Serial1.begin(115200);
 
   csp_usart_conf_t conf = {.device = "Serial1",
-                           .baudrate = 115200, /* supported on all platforms */
+                           .baudrate = 500000, /* supported on all platforms */
                            .databits = 8,
                            .stopbits = 1,
                            .paritysetting = 0,
@@ -82,20 +80,19 @@ static void csp_task(void *param) {
 
     /* Wait for a new connection, 10000 mS timeout */
     csp_conn_t *conn;
-    if ((conn = csp_accept(sock, 5000)) == NULL) {
-      Serial.println("timeout");
+    if ((conn = csp_accept(sock, CSP_MAX_DELAY)) == NULL) {
       /* timeout */
       continue;
     }
-
-    Serial.println("something received");
-
     /* Read packets on connection, timout is 100 mS */
     csp_packet_t *packet;
     while ((packet = csp_read(conn, 50)) != NULL) {
+
       switch (csp_conn_dport(conn)) {
       case 10:
         /* Process packet here */
+        teensy_print("something received on port 10");
+
         csp_buffer_free(packet);
         break;
 
@@ -103,6 +100,8 @@ static void csp_task(void *param) {
         /* Call the default CSP service handler, handle pings, buffer use,
         etc.
          */
+        teensy_print("something received on port what?");
+
         csp_service_handler(conn, packet);
         break;
       }
@@ -117,7 +116,7 @@ static void csp_task(void *param) {
 }
 
 int main() {
-
+  teensy_serial_setup(115200);
   csp_conf_t csp_conf;
   csp_conf_get_defaults(&csp_conf);
   csp_conf.address = 1;
