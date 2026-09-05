@@ -1,3 +1,0 @@
-[submodule "libs/libcsp"]
-	path = libs/libcsp
-	url = git@github.com:lu-maca/libcsp-teensy.git
