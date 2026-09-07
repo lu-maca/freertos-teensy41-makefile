@@ -108,7 +108,7 @@ def build(bld):
     # ---------------------------------------------------------------
     sources = []
 
-    for path in [SRCPATH, COREPATH, LIBPATH + "/freertos"]:
+    for path in [SRCPATH, COREPATH, LIBPATH + "/freertos", LIBPATH + "/dmaserial"]:
         for ext in ('*.c', '*.cpp'):
             sources += glob.glob(os.path.join(path, '**', ext), recursive=True)
 

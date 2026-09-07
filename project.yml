@@ -7,7 +7,7 @@ flags:
     - -O2
     - -g
 cflags:
-    - -std=gnu99
+    - -std=gnu11
     - -ffunction-sections
     - -fdata-sections
 cxxflags:
@@ -33,6 +33,7 @@ defines:
 
 library_options:
     libcsp:
+        enable_reproducible_builds : true
         with_max_connections       : 20
         with_conn_queue_length     : 100
         with_router_queue_length   : 100
@@ -51,4 +52,5 @@ library_options:
         enable_rdp                 : false
         disable_stlib              : true
         disable_output             : true
-        includes                   : ../../libs/freertos/src,../../teensy4/
+        disable_print_stdio        : true
+        includes                   : ../../libs/freertos/src,../../libs/sys

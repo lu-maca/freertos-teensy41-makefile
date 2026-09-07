@@ -1,36 +1,8 @@
-/*
- * This file is part of the FreeRTOS port to Teensy boards.
- * Copyright (c) 2020-2024 Timo Sandmann
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library. If not, see <http://www.gnu.org/licenses/>.
- */
-
-/**
- * @file    main.cpp
- * @brief   FreeRTOS example for Teensy boards
- * @author  Timo Sandmann
- * @date    17.05.2020
- */
 
 #include "arduino_freertos.h"
-extern "C" {
-#include "csp.h"
-#include "csp/arch/csp_thread.h"
 #include "csp/drivers/usart.h"
-#include "csp/interfaces/csp_if_kiss.h"
-#include "csp/drivers/usart_teensy.h"
-}
+#include "csp/csp.h"
+#include "drivers/uart/uart.h"
 
 static void task1(void *) {
   pinMode(arduino::LED_BUILTIN, arduino::OUTPUT);
@@ -45,81 +17,67 @@ static void task1(void *) {
   vTaskDelete(nullptr);
 }
 
-static void csp_task(void *param) {
-  /* we want to use kiss, so we set up the csp_kiss interface */
+/// OBDH stuff
+#ifndef CSP_ROUTER_TASK_PRIO
+#define CSP_ROUTER_TASK_PRIO (configMAX_PRIORITIES - 3)
+#endif
 
-  csp_usart_conf_t conf = {.device = "Serial1",
-                           .baudrate = 500000, /* supported on all platforms */
-                           .databits = 8,
-                           .stopbits = 1,
-                           .paritysetting = 0,
-                           .checkparity = 0};
+#ifndef CSP_ADDR 
+#define CSP_ADDR 15
+#endif
 
-  csp_route_start_task(1024, 2);
-  csp_usart_open_and_add_kiss_interface(&conf, CSP_IF_KISS_DEFAULT_NAME,
-                                        nullptr);
+#ifndef CSP_ROUTER_STACK_DEPTH
+#define CSP_ROUTER_STACK_DEPTH      2048
+#endif
 
-  // /* Setup routing table */
-  csp_rtable_clear();
-  csp_rtable_load("7/5 KISS");
+static void csp_route_task([[maybe_unused]] void *args) {
+  for(;;)
+	{
+		csp_route_work();
+	}
+}
 
-  /* Create socket with no specific socket options, e.g. accepts CRC32, HMAC,
-   * XTEA, etc. if enabled during compilation */
-  csp_socket_t *sock = csp_socket(CSP_SO_NONE);
+int obdh_init(int address) {
+  // initialize drivers
+  drivers::uart_init();
 
-  /* Bind socket to all ports, e.g. all incoming connections will be handled
-   * here */
-  csp_bind(sock, CSP_ANY);
-
-  /* Create a backlog of 10 connections, i.e. up to 10 new connections can be
-   * queued */
-  csp_listen(sock, 10);
-
-  /* Wait for connections and then process packets on the connection */
-  while (1) {
-
-    /* Wait for a new connection, 10000 mS timeout */
-    csp_conn_t *conn;
-    if ((conn = csp_accept(sock, CSP_MAX_DELAY)) == NULL) {
-      /* timeout */
-      continue;
-    }
-    /* Read packets on connection, timout is 100 mS */
-    csp_packet_t *packet;
-    while ((packet = csp_read(conn, 50)) != NULL) {
-
-      switch (csp_conn_dport(conn)) {
-      case 10:
-        /* Process packet here */
-        csp_buffer_free(packet);
-        break;
-
-      default:
-        /* Call the default CSP service handler, handle pings, buffer use,
-        etc.
-         */
-        csp_service_handler(conn, packet);
-        break;
-      }
-    }
-
-    /* Close current connection */
-    csp_close(conn);
+  csp_iface_t *iface;
+  csp_usart_conf_t csp_conf = {
+      .device = "/dev/serial1",
+      .baudrate = 115200,
+      .databits = 8,
+      .stopbits = 1,
+      .paritysetting = 0,
+  };
+  auto ret = csp_usart_open_and_add_kiss_interface(&csp_conf, "serial1", address, &iface);
+  if (ret == CSP_ERR_NONE) {
+    return ret;
   }
-  vTaskDelete(nullptr);
+  iface->is_default = 1;
 
-  return CSP_TASK_RETURN;
+  static StaticTask_t csp_rtr_tcb;
+	StackType_t *rtr_stk_ptr;
+
+	rtr_stk_ptr = static_cast<StackType_t*>(malloc(CSP_ROUTER_STACK_DEPTH*sizeof(StackType_t)));
+	if (!rtr_stk_ptr) {
+		return CSP_ERR_NOMEM;
+	}
+
+  TaskHandle_t cr_task_ret = xTaskCreateStatic(csp_route_task, "csp_router", 2048,
+	    NULL, CSP_ROUTER_TASK_PRIO, rtr_stk_ptr, &csp_rtr_tcb);
+
+  if (cr_task_ret == NULL) {
+		return CSP_ERR_NOMEM;
+	}
+
+  return CSP_ERR_NONE;
 }
 
 int main() {
-  teensy_serial_setup(115200);
-  csp_conf_t csp_conf;
-  csp_conf_get_defaults(&csp_conf);
-  csp_conf.address = 1;
-  csp_init(&csp_conf);
 
   xTaskCreate(task1, "task1", 128, nullptr, 2, nullptr);
-  xTaskCreate(csp_task, "CSP", 1024, nullptr, 2, nullptr);
+  // start obdh
+  obdh_init(CSP_ADDR);
 
   vTaskStartScheduler();
 
