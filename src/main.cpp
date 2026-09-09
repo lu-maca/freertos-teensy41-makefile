@@ -1,7 +1,7 @@
 
 #include "arduino_freertos.h"
-#include "logger/logger.h"
 #include "drivers/uart/uart.h"
+#include "logger/logger.h"
 #include "obdh/obdh.h"
 
 static void task1(void*)

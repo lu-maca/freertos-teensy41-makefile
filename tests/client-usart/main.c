@@ -38,17 +38,16 @@ void do_cmp_ident(int addr)
     	printf("Timeout\n");
 		return;
 	}
-    long long elapsed_ns = (long long)(end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
-	double elapsed_us = elapsed_ns / 1000.0;
+    double elapsed_ms = (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_nsec - start.tv_nsec) / 1000000.0;
 	
-    printf("Replied in %f us.\n", elapsed_us);
+    printf("Replied in %f ms.\n", elapsed_ms);
 }
 
 int main(int argc, char* argv[])
 {
     csp_usart_conf_t conf = {
         .device = DEVICE_NAME,
-        .baudrate = 115200,
+        .baudrate = 1000000,
         .databits = 8,
         .stopbits = 1,
         .paritysetting = 0,

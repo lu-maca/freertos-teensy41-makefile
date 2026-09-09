@@ -1,6 +1,5 @@
 #pragma once
 
-
 namespace logger
 {
 
@@ -14,4 +13,3 @@ namespace logger
 
     void error(const char* format, ...);
 }  // namespace logger
-

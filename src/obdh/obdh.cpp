@@ -1,7 +1,7 @@
 #include "obdh/obdh.h"
 #include "HardwareSerial.h"
-#include "logger/logger.h"
 #include "drivers/uart/uart.h"
+#include "logger/logger.h"
 
 static void csp_route_task([[maybe_unused]] void* args)
 {
@@ -22,15 +22,11 @@ static void csp_packets_dispatcher_task([[maybe_unused]] void* args)
 
     while (1)
     {
-        logger::debug("waiting for packets on node %d", CSP_ADDR);
         csp_conn_t* conn = csp_accept(&sock, CSP_MAX_DELAY);
-        logger::debug("accepted");
 
-        /* Read packets on connection, timeout is 100 mS */
         csp_packet_t* packet;
-        while ((packet = csp_read(conn, 100)) != nullptr)
+        while ((packet = csp_read(conn, CSP_MAX_DELAY)) != nullptr)
         {
-            logger::info("packet on port %d", csp_conn_dport(conn));
             switch (csp_conn_dport(conn))
             {
                 default:
@@ -52,7 +48,7 @@ int obdh_init(int address)
     csp_iface_t* iface;
     csp_usart_conf_t csp_conf = {
         .device = "/dev/serial1",
-        .baudrate = 115200,
+        .baudrate = 1000000,
         .databits = 8,
         .stopbits = 1,
         .paritysetting = 0,

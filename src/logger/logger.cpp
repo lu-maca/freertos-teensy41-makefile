@@ -1,6 +1,6 @@
 #include "logger/logger.h"
-#include "logger/priv/mycdebug.h"
 #include "arduino_freertos.h"
+#include "logger/priv/mycdebug.h"
 
 #include <cstdarg>
 
