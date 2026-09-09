@@ -59,7 +59,7 @@ def configure(cfg):
 
     cfg.env.MCU = 'IMXRT1062'
     cfg.env.MCU_DEF = 'ARDUINO_TEENSY41'
-    cfg.env.LDSCRIPT = 'teensy4/imxrt1062_t41.ld'
+    cfg.env.LDSCRIPT = 'libs/teensy4-core/imxrt1062_t41.ld'
 
     libs = Project.yml["library_options"]
     for libname, libopts in libs.items():
@@ -80,7 +80,7 @@ def configure(cfg):
 def build(bld):
     TARGET = "freertos-teensy41.elf"
 
-    COREPATH = 'teensy4'
+    COREPATH = 'libs/teensy4-core'
     LIBPATH  = 'libs'
     SRCPATH  = 'src'
 

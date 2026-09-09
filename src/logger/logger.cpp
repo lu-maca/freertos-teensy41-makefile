@@ -1,5 +1,4 @@
 #include "logger/logger.h"
-#include "arduino_freertos.h"
 #include "logger/priv/mycdebug.h"
 
 #include <cstdarg>
@@ -7,56 +6,71 @@
 namespace logger
 {
 
-    void setup([[maybe_unused]] int level)
-    {
-        Serial.begin(115200);
-    }
+static level log_level;
 
-    void debug(const char* format, ...)
-    {
-        Serial.print("[debug   ] ");
+void init(const level lev)
+{
+  log_level = lev;
+  Serial.begin(115200);
+}
 
-        va_list args;
-        va_start(args, format);
-        vcdebug(format, args);
-        va_end(args);
+void debug(const char* format, ...)
+{
+  if (log_level == level::debug)
+  {
+    Serial.print("[debug   ] ");
 
-        Serial.println();
-    }
+    va_list args;
+    va_start(args, format);
+    vcdebug(format, args);
+    va_end(args);
 
-    void info(const char* format, ...)
-    {
-        Serial.print("[info    ] ");
+    Serial.println();
+  }
+}
 
-        va_list args;
-        va_start(args, format);
-        vcdebug(format, args);
-        va_end(args);
+void info(const char* format, ...)
+{
+  if (log_level <= level::info)
+  {
+    Serial.print("[info    ] ");
 
-        Serial.println();
-    }
+    va_list args;
+    va_start(args, format);
+    vcdebug(format, args);
+    va_end(args);
 
-    void warning(const char* format, ...)
-    {
-        Serial.print("[warning ] ");
+    Serial.println();
+  }
+}
 
-        va_list args;
-        va_start(args, format);
-        vcdebug(format, args);
-        va_end(args);
+void warning(const char* format, ...)
+{
+  if (log_level <= level::warning)
+  {
+    Serial.print("[warning ] ");
 
-        Serial.println();
-    }
+    va_list args;
+    va_start(args, format);
+    vcdebug(format, args);
+    va_end(args);
 
-    void error(const char* format, ...)
-    {
-        Serial.print("[error   ] ");
+    Serial.println();
+  }
+}
 
-        va_list args;
-        va_start(args, format);
-        vcdebug(format, args);
-        va_end(args);
+void error(const char* format, ...)
+{
+  if (log_level <= level::error)
+  {
+    Serial.print("[error   ] ");
 
-        Serial.println();
-    }
+    va_list args;
+    va_start(args, format);
+    vcdebug(format, args);
+    va_end(args);
+
+    Serial.println();
+  }
+}
 }  // namespace logger

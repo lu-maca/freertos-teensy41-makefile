@@ -11,7 +11,7 @@ cflags:
     - -ffunction-sections
     - -fdata-sections
 cxxflags:
-    - -std=gnu++20
+    - -std=gnu++23
     - -fno-exceptions
     - -fno-rtti
     - -fno-threadsafe-statics

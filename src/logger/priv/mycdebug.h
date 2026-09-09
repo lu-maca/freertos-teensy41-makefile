@@ -6,8 +6,8 @@ extern "C"
 {
 #endif
 
-    void cdebug(const char* format, ...);
-    void vcdebug(const char* format, va_list args);
+  void cdebug(const char* format, ...);
+  void vcdebug(const char* format, va_list args);
 
 #ifdef __cplusplus
 }
