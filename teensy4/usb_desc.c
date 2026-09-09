@@ -182,11 +182,9 @@ static uint8_t keyboard_report_desc[] = {
         0x15, 0x00,                     //   Logical Minimum (0),
         0x25, 0x01,                     //   Logical Maximum (1),
         0x81, 0x02,                     //   Input (Data, Variable, Absolute), ;Modifier keys
-#if KEYBOARD_SIZE == 8
         0x95, 0x01,                     //   Report Count (1),
         0x75, 0x08,                     //   Report Size (8),
         0x81, 0x03,                     //   Input (Constant),          ;Reserved byte
-#endif
         0x95, 0x05,                     //   Report Count (5),
         0x75, 0x01,                     //   Report Size (1),
         0x05, 0x08,                     //   Usage Page (LEDs),
@@ -196,7 +194,6 @@ static uint8_t keyboard_report_desc[] = {
         0x95, 0x01,                     //   Report Count (1),
         0x75, 0x03,                     //   Report Size (3),
         0x91, 0x03,                     //   Output (Constant),         ;LED report padding
-#if KEYBOARD_SIZE == 8
         0x95, 0x06,                     //   Report Count (6),
         0x75, 0x08,                     //   Report Size (8),
         0x15, 0x00,                     //   Logical Minimum (0),
@@ -205,16 +202,6 @@ static uint8_t keyboard_report_desc[] = {
         0x19, 0x00,                     //   Usage Minimum (0),
         0x29, 0x7F,                     //   Usage Maximum (104),
         0x81, 0x00,                     //   Input (Data, Array),       ;Normal keys
-#elif KEYBOARD_SIZE == 16
-	0x95, 0x78,			//   Report Count (120),
-        0x75, 0x01,                     //   Report Size (1),
-        0x19, 0x00,                     //   Usage Minimum (0),
-        0x29, 0xE7,                     //   Usage Maximum (119),
-        0x05, 0x07,                     //   Usage Page (Key Codes),
-        0x15, 0x00,                     //   Logical Minimum (0),
-        0x25, 0x01,                     //   Logical Maximum (1),
-        0x81, 0x02,                     //   Input (Data, Variable, Absolute), ;Normal keys NKRO
-#endif
         0xC0                            // End Collection
 };
 #endif
@@ -2792,7 +2779,7 @@ void usb_init_serialnumber(void)
 
 // This table provides access to all the descriptor data above.
 
-PROGMEM const usb_descriptor_list_t usb_descriptor_list[] = {
+const usb_descriptor_list_t usb_descriptor_list[] = {
 	//wValue, wIndex, address,          length
 	{0x0100, 0x0000, device_descriptor, sizeof(device_descriptor)},
 	{0x0600, 0x0000, qualifier_descriptor, sizeof(qualifier_descriptor)},

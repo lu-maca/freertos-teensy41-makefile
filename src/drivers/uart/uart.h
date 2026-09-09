@@ -5,36 +5,38 @@
 #include "DmaSerial.h"
 #include "drivers/device.h"
 
-namespace drivers {
+namespace drivers
+{
 
-class Uart : public Device {
-  DmaSerial& serial_;
+    /// @brief a thread safe class that uses dmaserial
+    class Uart : public Device
+    {
+        DmaSerial& serial_;
 
-public:
-  Uart(DmaSerial& serial, const std::string& name)
-      : Device(name), serial_{serial} {};
+       public:
+        Uart(DmaSerial& serial, const std::string& name) : Device(name), serial_{serial} {};
 
-  void begin(uint32_t baud, uint16_t format = 0);
-  
-  [[nodiscard]] int available();
+        void begin(uint32_t baud, uint16_t format = 0);
 
-  [[nodiscard]] int read();
+        [[nodiscard]] int available();
 
-  [[nodiscard]] size_t readBytes(char *buffer, size_t length);
+        [[nodiscard]] int read();
 
-  [[nodiscard]] size_t write(const uint8_t *buffer, size_t size);
+        [[nodiscard]] size_t readBytes(char* buffer, size_t length);
 
-  [[nodiscard]] int unsafeAvailable();
+        [[nodiscard]] size_t write(const uint8_t* buffer, size_t size);
 
-  [[nodiscard]] int unsafeRead();
+        [[nodiscard]] int unsafeAvailable();
 
-  [[nodiscard]] size_t unsafeReadBytes(char *buffer, size_t length);
+        [[nodiscard]] int unsafeRead();
 
-  [[nodiscard]] size_t unsafeWrite(const uint8_t *buffer, size_t size);
+        [[nodiscard]] size_t unsafeReadBytes(char* buffer, size_t length);
 
+        [[nodiscard]] size_t unsafeWrite(const uint8_t* buffer, size_t size);
 
-};
+        void setRxTaskHandle(TaskHandle_t handle);
+    };
 
-void uart_init(/* add name of the interface to be initialized */);
+    void uart_init(/* add name of the interface to be initialized */);
 
-} // namespace drivers
+}  // namespace drivers

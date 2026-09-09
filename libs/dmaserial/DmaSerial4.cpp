@@ -5,7 +5,10 @@
 
 #include "DmaSerial.h"
 
+#define IRQ_PRIORITY 64  // 0 = highest priority, 255 = lowest - matches old HardwareSerial4.cpp
+
 #ifndef ARDUINO_TEENSY_MICROMOD
+// dmaSerial4 == LPUART3 (same physical port Serial4 used to own).
 const DmaSerial::Base_t DmaSerial::serial4Base = {
     &IMXRT_LPUART3,
     DMAMUX_SOURCE_LPUART3_RX,
@@ -14,8 +17,10 @@ const DmaSerial::Base_t DmaSerial::serial4Base = {
     CCM_CCGR0_LPUART3(CCM_CCGR_ON),
     {{16,2, &IOMUXC_LPUART3_RX_SELECT_INPUT, 0}, {0xff, 0xff, nullptr, 0}},
 	{{17,2, &IOMUXC_LPUART3_TX_SELECT_INPUT, 0}, {0xff, 0xff, nullptr, 0}},
+    IRQ_LPUART3,
+    IRQ_PRIORITY,
 };
-#else
+#else  // Teensy Micromod - dmaSerial4 == LPUART4 on this board
 const DmaSerial::Base_t DmaSerial::serial4Base = {
     &IMXRT_LPUART4,
     DMAMUX_SOURCE_LPUART4_RX,
@@ -24,5 +29,7 @@ const DmaSerial::Base_t DmaSerial::serial4Base = {
     CCM_CCGR1_LPUART4(CCM_CCGR_ON),
     {{7,2, &IOMUXC_LPUART4_RX_SELECT_INPUT, 2}, {0xff, 0xff, nullptr, 0}},
     {{8,2, &IOMUXC_LPUART4_TX_SELECT_INPUT, 2}, {0xff, 0xff, nullptr, 0}},
+    IRQ_LPUART4,
+    IRQ_PRIORITY,
 };
 #endif

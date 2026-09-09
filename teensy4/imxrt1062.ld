@@ -10,19 +10,18 @@ ENTRY(ImageVectorTable)
 
 SECTIONS
 {
-	.text.headers : ALIGN(4) {
-		FILL(0xFF)
+	.text.headers : {
 		KEEP(*(.flashconfig))
-		. = 0x1000;
+		FILL(0xFF)
+		. = ORIGIN(FLASH) + 0x1000;
 		KEEP(*(.ivt))
-		. = 0x1020;
 		KEEP(*(.bootdata))
 		. = ALIGN(1024);
 	} > FLASH
 
-	.text.code : ALIGN(4) {
-		*(.flashmem*)
+	.text.code : {
 		KEEP(*(.startup))
+		*(.flashmem*)
 		. = ALIGN(4);
 		KEEP(*(.init))
 		__preinit_array_start = .;
@@ -31,92 +30,75 @@ SECTIONS
 		__init_array_start = .;
 		KEEP (*(.init_array))
 		__init_array_end = .;
-		*(.text.__libc_init_array)
 		. = ALIGN(4);
 	} > FLASH
 
-	.text.progmem : ALIGN(4) {
+	.text.progmem : {
 		*(.progmem*)
 		. = ALIGN(4);
 	} > FLASH
 
-	.data.func : ALIGN(4) {
-		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.*__func__*)))
-		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.*__PRETTY_FUNCTION__*)))
-		. = ALIGN(4);
-	} > FLASH
-
-	.text.itcm : ALIGN(32) {
+	.text.itcm : {
 		. = . + 32; /* MPU to trap NULL pointer deref */
-		*(.fastrun*)
+		*(.fastrun)
 		*(.text*)
-		. = ALIGN(4);
+		. = ALIGN(16);
 	} > ITCM  AT> FLASH
 
-	.data : ALIGN(4) {
-		*(.endpoint_queue)
+	.ARM.exidx : {
+		__exidx_start = .;
+		*(.ARM.exidx* .ARM.extab.text* .gnu.linkonce.armexidx.*)
+		__exidx_end = .;
+	} > ITCM  AT> FLASH
+
+	.data : {
+    		*(.endpoint_queue)    
 		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))
 		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.data*)))
-		KEEP(*(.vectorsram))
-		. = ALIGN(4);
+   		 KEEP(*(.vectorsram))
 	} > DTCM  AT> FLASH
 
-	.bss : ALIGN(4) {
+	.bss ALIGN(4) : {
 		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.bss*)))
 		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(COMMON)))
+	} > DTCM
+
+	.noinit ALIGN(4) (NOLOAD) : {
+		*(.noinit .noinit.*)
 		. = ALIGN(32);
 		. = . + 32; /* MPU to trap stack overflow */
 	} > DTCM
 
-	.bss.dma (NOLOAD) : ALIGN(32) {
+	.bss.dma (NOLOAD) : {
 		*(.hab_log)
-		*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.dmabuffers)))
+		*(.dmabuffers)
 		. = ALIGN(32);
 	} > RAM
 
-	.bss.padding (NOLOAD) : ALIGN(4) {
-		_heap_start = . ;
-		. = ABSOLUTE(ORIGIN(RAM) + LENGTH(RAM) - 128 - SIZEOF(.ARM.exidx));
-		. = ALIGN(4);
-		_heap_end = . ;
-	} > RAM
-
-	.ARM.exidx : ALIGN(4) {
-		__exidx_start = .;
-		*(.gnu.linkonce.armexidx.*)
-		*(.ARM.exidx.fastrun*)
-		*(.ARM.exidx.text*)
-		*(.ARM.exidx)
-		*(.ARM.exidx.flashmem*)
-		*(.ARM.exidx.startup*)
-		. = ALIGN(4);
-		__exidx_end = .;
-		*(.ARM.extab* .gnu.linkonce.armextab.*)
-		. = ALIGN(4);
-	} > RAM  AT> FLASH
-
-	.text.csf : ALIGN(4) {
+	.text.csf : {
 		FILL(0xFF)
+		. = ALIGN(1024);
 		KEEP(*(.csf))
 		__text_csf_end = .;
 	} > FLASH
 
 	_stext = ADDR(.text.itcm);
-	_etext = ADDR(.text.itcm) + SIZEOF(.text.itcm);
+	_etext = ADDR(.text.itcm) + SIZEOF(.text.itcm) + SIZEOF(.ARM.exidx);
 	_stextload = LOADADDR(.text.itcm);
 
 	_sdata = ADDR(.data);
 	_edata = ADDR(.data) + SIZEOF(.data);
 	_sdataload = LOADADDR(.data);
 
-	_sexidx = ADDR(.ARM.exidx);
-	_eexidx = ADDR(.ARM.exidx) + SIZEOF(.ARM.exidx);
-	_sexidxload = LOADADDR(.ARM.exidx);
-
 	_sbss = ADDR(.bss);
 	_ebss = ADDR(.bss) + SIZEOF(.bss);
 
-	_itcm_block_count = (SIZEOF(.text.itcm) + 0x7FFF) >> 15;
+	_enoinit = ADDR(.noinit) + SIZEOF(.noinit);
+
+	_heap_start = ADDR(.bss.dma) + SIZEOF(.bss.dma);
+	_heap_end = ORIGIN(RAM) + LENGTH(RAM);
+
+	_itcm_block_count = (SIZEOF(.text.itcm) + SIZEOF(.ARM.exidx) + 0x7FFF) >> 15;
 	_flexram_bank_config = 0xAAAAAAAA | ((1 << (_itcm_block_count * 2)) - 1);
 	_estack = ORIGIN(DTCM) + ((16 - _itcm_block_count) << 15);
 

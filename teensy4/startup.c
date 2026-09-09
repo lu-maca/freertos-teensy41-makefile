@@ -14,37 +14,33 @@ extern unsigned long _etext;
 extern unsigned long _sdataload;
 extern unsigned long _sdata;
 extern unsigned long _edata;
-extern unsigned long _sexidxload;
-extern unsigned long _sexidx;
-extern unsigned long _eexidx;
 extern unsigned long _sbss;
 extern unsigned long _ebss;
+extern unsigned long _enoinit;
 extern unsigned long _flexram_bank_config;
 extern unsigned long _estack;
 extern unsigned long _extram_start;
 extern unsigned long _extram_end;
 
 __attribute__ ((used, aligned(1024), section(".vectorsram")))
-void (*_VectorsRam[NVIC_NUM_INTERRUPTS+16])(void);
+void (* volatile _VectorsRam[NVIC_NUM_INTERRUPTS+16])(void);
 
 static void memory_copy(uint32_t *dest, const uint32_t *src, uint32_t *dest_end);
 static void memory_clear(uint32_t *dest, uint32_t *dest_end);
 static void configure_systick(void);
-static void reset_PFD(void);
+static void reset_PFD();
 extern void systick_isr(void);
 extern void pendablesrvreq_isr(void);
-static void configure_cache(void);
-#if defined ARDUINO_TEENSY41 && !defined TEENSY_NO_EXTRAM
-static void configure_external_ram(void);
-#endif
-extern void unused_interrupt_vector(void);
-static void usb_pll_start(void);
+void configure_cache(void);
+void configure_external_ram(void);
+void unused_interrupt_vector(void);
+void usb_pll_start();
 extern void analog_init(void); // analog.c
 extern void pwm_init(void); // pwm.c
 extern void tempmon_init(void);  //tempmon.c
 extern float tempmonGetTemp(void);
 extern unsigned long rtc_get(void);
-extern uint32_t set_arm_clock(uint32_t frequency); // clockspeed.c
+uint32_t set_arm_clock(uint32_t frequency); // clockspeed.c
 extern void __libc_init_array(void); // C++ standard library
 
 uint8_t external_psram_size = 0;
@@ -54,35 +50,35 @@ struct smalloc_pool extmem_smalloc_pool;
 
 extern int main (void);
 FLASHMEM void startup_default_early_hook(void) {}
-void startup_early_hook(void)	__attribute__ ((weak, alias("startup_default_early_hook"), section(".flashmem")));
+void startup_early_hook(void)	__attribute__ ((weak, alias("startup_default_early_hook")));
 FLASHMEM void startup_default_middle_hook(void) {}
 void startup_middle_hook(void)	__attribute__ ((weak, alias("startup_default_middle_hook")));
 FLASHMEM void startup_default_late_hook(void) {}
-void startup_late_hook(void)	__attribute__ ((weak, alias("startup_default_late_hook"), section(".flashmem")));
-extern void startup_debug_reset(void) __attribute__((weak, noinline, section(".flashmem")));
+void startup_late_hook(void)	__attribute__ ((weak, alias("startup_default_late_hook")));
+extern void startup_debug_reset(void) __attribute__((noinline));
 FLASHMEM void startup_debug_reset(void) { __asm__ volatile("nop"); }
 
 static void ResetHandler2(void);
 
-__attribute__((section(".startup"), naked, noreturn))
+__attribute__((section(".startup"), naked))
 void ResetHandler(void)
 {
-	__asm__ volatile("str %1, [%0] \n\t" :: "r" (&IOMUXC_GPR_GPR17), "r" (&_flexram_bank_config) : "memory");
-	__asm__ volatile("str %1, [%0] \n\t" :: "r" (&IOMUXC_GPR_GPR16), "r" (0x00200007) : "memory");
-	__asm__ volatile("str %1, [%0] \n\t" :: "r" (&IOMUXC_GPR_GPR14), "r" (0x00AA0000) : "memory");
-	__asm__ volatile("dsb" ::: "memory");
-	__asm__ volatile("isb" ::: "memory");
-	__asm__ volatile("msr msp, %0" :: "r" (&_estack) : "memory");
-	__asm__ volatile("dsb" ::: "memory");
-	__asm__ volatile("isb" ::: "memory");
-
+	IOMUXC_GPR_GPR17 = (uint32_t)&_flexram_bank_config;
+	IOMUXC_GPR_GPR16 = 0x00200007;
+	IOMUXC_GPR_GPR14 = 0x00AA0000;
+	__asm__ volatile("mov sp, %0" : : "r" ((uint32_t)&_estack) : "memory");
+#if 0
+	__asm__ volatile("dsb":::"memory");
+	__asm__ volatile("isb":::"memory");
+#endif
 	ResetHandler2();
 	__builtin_unreachable();
 }
 
-__attribute__((section(".startup"), optimize("no-tree-loop-distribute-patterns"), noinline, noreturn))
+__attribute__((section(".startup"), noinline, noreturn))
 static void ResetHandler2(void)
 {
+	unsigned int i;
 	__asm__ volatile("dsb":::"memory");
 #if 1
 	// Some optimization with LTO won't start without this delay, but why?
@@ -122,21 +118,15 @@ static void ResetHandler2(void)
 	// Initialize memory
 	memory_copy(&_stext, &_stextload, &_etext);
 	memory_copy(&_sdata, &_sdataload, &_edata);
-	memory_copy(&_sexidx, &_sexidxload, &_eexidx);
 	memory_clear(&_sbss, &_ebss);
-	__asm volatile ("dsb st" ::: "memory");
 
 	// enable FPU
 	SCB_CPACR = 0x00F00000;
 
 	// set up blank interrupt & exception vector table
-	_VectorsRam[0] = (void*)&_estack;
-	unsigned int i;
-	for (i=1; i < NVIC_NUM_INTERRUPTS + 16; i++) _VectorsRam[i] = &unused_interrupt_vector;
+	for (i=0; i < NVIC_NUM_INTERRUPTS + 16; i++) _VectorsRam[i] = &unused_interrupt_vector;
 	for (i=0; i < NVIC_NUM_INTERRUPTS; i++) NVIC_SET_PRIORITY(i, 128);
-	__asm volatile ("dsb st" ::: "memory");
 	SCB_VTOR = (uint32_t)_VectorsRam;
-	__asm volatile ("dsb st" ::: "memory");
 
 	reset_PFD();
 
@@ -161,15 +151,12 @@ static void ResetHandler2(void)
 	// must enable PRINT_DEBUG_STUFF in debug/print.h
 	printf_debug_init();
 	printf("\n***********IMXRT Startup**********\n");
-//	printf("test %d %d %d\n", 1, -1234567, 3);
+	printf("test %d %d %d\n", 1, -1234567, 3);
 
 	configure_cache();
 	configure_systick();
 	usb_pll_start();	
-	printf("before reset_PFD()\r\n");
 	reset_PFD(); //TODO: is this really needed?
-	printf("reset_PFD() done.\r\n");
-
 #ifdef F_CPU
 	set_arm_clock(F_CPU);
 #endif
@@ -191,8 +178,7 @@ static void ResetHandler2(void)
 	}
 	SNVS_HPCR |= SNVS_HPCR_RTC_EN | SNVS_HPCR_HP_TS;
 
-#if defined ARDUINO_TEENSY41 && !defined TEENSY_NO_EXTRAM
-	printf("before configure_external_ram()\r\n");
+#ifdef ARDUINO_TEENSY41
 	configure_external_ram();
 #endif
 	analog_init();
@@ -218,7 +204,7 @@ static void ResetHandler2(void)
 	startup_late_hook();
 	__libc_init_array();
 	//printf("after C++ constructors\n");
-	//printf("before main\n");
+	//printf("before setup\n");
 	main();
 	
 	while (1) asm("WFI");
@@ -238,12 +224,10 @@ static void ResetHandler2(void)
 #define SYSTICK_EXT_FREQ 100000
 
 extern volatile uint32_t systick_cycle_count;
-FLASHMEM static void configure_systick(void)
+static void configure_systick(void)
 {
 	_VectorsRam[14] = pendablesrvreq_isr;
 	_VectorsRam[15] = systick_isr;
-	__asm volatile ("dsb st" ::: "memory");
-
 	SYST_RVR = (SYSTICK_EXT_FREQ / 1000) - 1;
 	SYST_CVR = 0;
 	SYST_CSR = SYST_CSR_TICKINT | SYST_CSR_ENABLE;
@@ -294,7 +278,7 @@ FLASHMEM static void configure_systick(void)
 #define SIZE_4G		(SCB_MPU_RASR_SIZE(31) | SCB_MPU_RASR_ENABLE)
 #define REGION(n)	(SCB_MPU_RBAR_REGION(n) | SCB_MPU_RBAR_VALID)
 
-FLASHMEM static void configure_cache(void)
+FLASHMEM void configure_cache(void)
 {
 	//printf("MPU_TYPE = %08lX\n", SCB_MPU_TYPE);
 	//printf("CCR = %08lX\n", SCB_CCR);
@@ -321,7 +305,7 @@ FLASHMEM static void configure_cache(void)
 	SCB_MPU_RBAR = 0x20000000 | REGION(i++); // DTCM
 	SCB_MPU_RASR = MEM_NOCACHE | READWRITE | NOEXEC | SIZE_512K;
 	
-	SCB_MPU_RBAR = ((uint32_t)&_estack - 8192) | REGION(i++); // trap stack overflow
+	SCB_MPU_RBAR = ((uint32_t)&_enoinit) | REGION(i++); // trap stack overflow
 	SCB_MPU_RASR = SCB_MPU_RASR_TEX(0) | NOACCESS | NOEXEC | SIZE_32B;
 
 	SCB_MPU_RBAR = 0x20200000 | REGION(i++); // RAM (AXI bus)
@@ -334,7 +318,7 @@ FLASHMEM static void configure_cache(void)
 	SCB_MPU_RASR = MEM_CACHE_WBWA | READONLY | SIZE_16M;
 
 	SCB_MPU_RBAR = 0x70000000 | REGION(i++); // FlexSPI2
-	SCB_MPU_RASR = MEM_CACHE_WT | READWRITE | NOEXEC | SIZE_16M;
+	SCB_MPU_RASR = MEM_CACHE_WBWA | READWRITE | NOEXEC | SIZE_16M;
 	// We default RAM meant for data to NOEXEC as a proactive security measure.
 	// If you wish to dynamically load code into RAM and execute it, start here:
 	// https://forum.pjrc.com/index.php?threads/75610/#post-347791
@@ -352,16 +336,16 @@ FLASHMEM static void configure_cache(void)
 	SCB_MPU_CTRL = SCB_MPU_CTRL_ENABLE;
 
 	// cache enable, ARM DDI0403E, pg 628
-	__asm__ volatile("dsb" ::: "memory");
-	__asm__ volatile("isb" ::: "memory");
+	asm("dsb");
+	asm("isb");
 	SCB_CACHE_ICIALLU = 0;
 
-	__asm__ volatile("dsb" ::: "memory");
-	__asm__ volatile("isb" ::: "memory");
+	asm("dsb");
+	asm("isb");
 	SCB_CCR |= (SCB_CCR_IC | SCB_CCR_DC);
 }
 
-#if defined ARDUINO_TEENSY41 && !defined TEENSY_NO_EXTRAM
+#ifdef ARDUINO_TEENSY41
 
 #define LUT0(opcode, pads, operand) (FLEXSPI_LUT_INSTRUCTION((opcode), (pads), (operand)))
 #define LUT1(opcode, pads, operand) (FLEXSPI_LUT_INSTRUCTION((opcode), (pads), (operand)) << 16)
@@ -393,7 +377,7 @@ FLASHMEM static uint32_t flexspi2_psram_id(uint32_t addr)
 	return id & 0xFFFF;
 }
 
-FLASHMEM static void configure_external_ram()
+FLASHMEM void configure_external_ram()
 {
 	// initialize pins
 	IOMUXC_SW_PAD_CTL_PAD_GPIO_EMC_22 = 0x1B0F9; // 100K pullup, strong drive, max speed, hyst
@@ -517,8 +501,6 @@ FLASHMEM static void configure_external_ram()
 			// One PSRAM chip is present, 8 MByte
 			external_psram_size = 8;
 		}
-		__asm__ volatile("dsb" ::: "memory");
-		__asm__ volatile("isb" ::: "memory");
 		// TODO: zero uninitialized EXTMEM variables
 		// TODO: copy from flash to initialize EXTMEM variables
 		sm_set_pool(&extmem_smalloc_pool, &_extram_end,
@@ -534,7 +516,7 @@ FLASHMEM static void configure_external_ram()
 #endif // ARDUINO_TEENSY41
 
 
-FLASHMEM static void usb_pll_start()
+FLASHMEM void usb_pll_start()
 {
 	while (1) {
 		uint32_t n = CCM_ANALOG_PLL_USB1; // pg 759
@@ -574,23 +556,18 @@ FLASHMEM static void usb_pll_start()
 			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_EN_USB_CLKS;
 			continue;
 		}
-		printf("  usb_pll_start() done.\r\n");
 		return; // everything is as it should be  :-)
 	}
 }
 
-FLASHMEM static void reset_PFD()
+FLASHMEM void reset_PFD()
 {	
 	//Reset PLL2 PFDs, set default frequencies:
 	CCM_ANALOG_PFD_528_SET = (1 << 31) | (1 << 23) | (1 << 15) | (1 << 7);
 	CCM_ANALOG_PFD_528 = 0x2018101B; // PFD0:352, PFD1:594, PFD2:396, PFD3:297 MHz 	
-	__asm__ volatile("dsb st" ::: "memory");
-	__asm__ volatile("isb" ::: "memory");
 	//PLL3:
 	CCM_ANALOG_PFD_480_SET = (1 << 31) | (1 << 23) | (1 << 15) | (1 << 7);	
 	CCM_ANALOG_PFD_480 = 0x13110D0C; // PFD0:720, PFD1:664, PFD2:508, PFD3:454 MHz
-	__asm__ volatile("dsb st" ::: "memory");
-	__asm__ volatile("isb" ::: "memory");
 }
 
 extern void usb_isr(void);
@@ -607,7 +584,7 @@ extern void usb_isr(void);
 // Code from :: https://community.nxp.com/thread/389002
 
 
-__attribute__((section(".startup"), naked, weak))
+__attribute__((naked))
 void unused_interrupt_vector(void)
 {
 	uint32_t i, ipsr, crc, count;
@@ -615,19 +592,13 @@ void unused_interrupt_vector(void)
 	struct arm_fault_info_struct *info;
 	const uint32_t *p, *end;
 
-	unsigned int lr;
-	asm volatile("mov %0, lr" : "=r"(lr)::);
 	// disallow any nested interrupts
 	__disable_irq();
 	// store crash report info
 	asm volatile("mrs %0, ipsr\n" : "=r" (ipsr) :: "memory");
 	info = (struct arm_fault_info_struct *)0x2027FF80;
 	info->ipsr = ipsr;
-	if (lr & 4) {
-		asm volatile("mrs %0, psp\n" : "=r"(stack)::"memory");
-	} else {
-		asm volatile("mrs %0, msp\n" : "=r"(stack)::"memory");
-	}
+	asm volatile("tst lr, #4\nite eq\nmrseq %0, msp\nmrsne %0, psp\n" : "=r" (stack) :: "memory");
 	info->cfsr = SCB_CFSR;
 	info->hfsr = SCB_HFSR;
 	info->mmfar = SCB_MMFAR;
@@ -760,13 +731,13 @@ void * _sbrk(int incr)
         return prev;
 }
 
-__attribute__((section(".flashmem"), weak))
+__attribute__((weak))
 int _read(int file __attribute__((unused)), char *ptr __attribute__((unused)), int len __attribute__((unused)))
 {
 	return 0;
 }
 
-__attribute__((section(".flashmem"), weak))
+__attribute__((weak))
 int _close(int fd __attribute__((unused)))
 {
 	return -1;
@@ -774,59 +745,51 @@ int _close(int fd __attribute__((unused)))
 
 #include <sys/stat.h>
 
-__attribute__((section(".flashmem"), weak))
+__attribute__((weak))
 int _fstat(int fd __attribute__((unused)), struct stat *st)
 {
 	st->st_mode = S_IFCHR;
 	return 0;
 }
 
-__attribute__((section(".flashmem"), weak))
+__attribute__((weak))
 int _isatty(int fd __attribute__((unused)))
 {
 	return 1;
 }
 
-__attribute__((section(".flashmem"), weak))
+__attribute__((weak))
 int _lseek(int fd __attribute__((unused)), long long offset __attribute__((unused)), int whence __attribute__((unused)))
 {
 	return -1;
 }
 
-__attribute__((section(".flashmem"), weak))
+__attribute__((weak))
 void _exit(int status __attribute__((unused)))
 {
 	while (1) asm ("WFI");
 }
 
-__attribute__((section(".flashmem"), weak))
+__attribute__((weak))
 void __cxa_pure_virtual()
 {
 	while (1) asm ("WFI");
 }
 
 __attribute__((weak))
-int __cxa_guard_acquire (int32_t *g)
+int __cxa_guard_acquire (char *g)
 {
 	return !(*g);
 }
 
 __attribute__((weak))
-void __cxa_guard_release(int32_t *g)
+void __cxa_guard_release(char *g)
 {
 	*g = 1;
 }
 
-__attribute__((section(".flashmem"), weak))
+__attribute__((weak))
 void abort(void)
 {
 	while (1) asm ("WFI");
 }
-
-__attribute__((section(".startup"), weak))
-void _init() {
-	
-}
-
-__attribute__((weak))
-void* __dso_handle = 0;

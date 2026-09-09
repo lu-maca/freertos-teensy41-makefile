@@ -5,6 +5,9 @@
 
  #include "DmaSerial.h"
 
+#define IRQ_PRIORITY 64  // 0 = highest priority, 255 = lowest - matches old HardwareSerial5.cpp
+
+// dmaSerial5 == LPUART8 (same physical port Serial5 used to own).
 const DmaSerial::Base_t DmaSerial::serial5Base = {
 	&IMXRT_LPUART8,
 	DMAMUX_SOURCE_LPUART8_RX,
@@ -21,4 +24,6 @@ const DmaSerial::Base_t DmaSerial::serial5Base = {
 	{{21,2, &IOMUXC_LPUART8_RX_SELECT_INPUT, 1}, {39, 2, &IOMUXC_LPUART8_RX_SELECT_INPUT, 0}},
 	{{20,2, &IOMUXC_LPUART8_TX_SELECT_INPUT, 1}, {38, 2, &IOMUXC_LPUART8_TX_SELECT_INPUT, 0}},
 	#endif
+	IRQ_LPUART8,
+	IRQ_PRIORITY,
 };

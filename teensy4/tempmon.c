@@ -14,7 +14,7 @@ static float s_hot_ROOM, s_roomC_hotC;
 
 extern void unused_interrupt_vector(void); // startup.c
 
-FLASHMEM void Panic_Temp_isr(void) {
+void Panic_Temp_isr(void) {
   unused_interrupt_vector();
   //IOMUXC_GPR_GPR16 = 0x00000007;
   //SNVS_LPCR |= SNVS_LPCR_TOP; //Switch off now
@@ -68,7 +68,7 @@ FLASHMEM void tempmon_init(void)
 }
 
 
-FLASHMEM float tempmonGetTemp(void)
+float tempmonGetTemp(void)
 {
     uint32_t nmeas;
     float tmeas;
@@ -85,17 +85,17 @@ FLASHMEM float tempmonGetTemp(void)
     return tmeas;
 }
 
-FLASHMEM void tempmon_Start()
+void tempmon_Start()
 {
     TEMPMON_TEMPSENSE0 |= 0x2U;
 }
 
-FLASHMEM void tempmon_Stop()
+void tempmon_Stop()
 {
     TEMPMON_TEMPSENSE0 &= ~0x2U;
 }
 
-FLASHMEM void tempmon_PwrDwn()
+void tempmon_PwrDwn()
 {
     TEMPMON_TEMPSENSE0 |= 0x1U;
 }

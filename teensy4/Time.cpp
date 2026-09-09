@@ -28,7 +28,6 @@
 */
 
 #include <Arduino.h>
-#include <ctime>
 
 
 // TODO: replace this slow Time library code with faster 32 bit approach

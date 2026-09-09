@@ -35,7 +35,6 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "HardwareSerial.h"
 #include "Arduino.h"
 #include "Print.h"
 #if defined(__has_include) && __has_include("Wire.h")
@@ -149,22 +148,6 @@ using ::micros;
 using ::millis;
 using ::yield;
 
-using ::Serial;
-#if !defined DISABLE_ARDUINO_HWSERIAL
-using ::HardwareSerial;
-using ::Serial1;
-using ::Serial2;
-using ::Serial3;
-using ::Serial4;
-using ::Serial5;
-using ::Serial6;
-#if defined ARDUINO_TEENSY40 || defined ARDUINO_TEENSY41
-using ::Serial7;
-#endif
-#ifdef ARDUINO_TEENSY41
-using ::Serial8;
-#endif
-#endif // !DISABLE_ARDUINO_HWSERIAL
 #if defined(__has_include) && __has_include("SPI.h") && !defined DISABLE_ARDUINO_SPI
 using ::SPI;
 using ::SPI1;

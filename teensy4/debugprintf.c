@@ -1,5 +1,3 @@
-#pragma GCC optimize ("-Os")
-
 #include "debug/printf.h"
 
 #ifdef PRINT_DEBUG_STUFF
@@ -58,7 +56,7 @@ FLASHMEM void printf_debug(const char *format, ...)
 	va_end(args);
 }
 
-FLASHMEM static void puint_debug(unsigned int num)
+static void puint_debug(unsigned int num)
 {
 	char buf[12];
 	unsigned int i = sizeof(buf)-2;
@@ -77,39 +75,35 @@ FLASHMEM static void puint_debug(unsigned int num)
 #if defined(PRINT_DEBUG_USING_USB) && defined(CDC_STATUS_INTERFACE) && defined(CDC_DATA_INTERFACE)
 #include "usb_dev.h"
 #include "usb_serial.h"
-__attribute__((section(".flashmem"), weak)) void putchar_debug(char c)
+FLASHMEM void putchar_debug(char c)
 {
 	usb_serial_putchar(c);
-}
+}	
 
-__attribute__((section(".flashmem"), weak)) void printf_debug_init(void) {}
+FLASHMEM void printf_debug_init(void) {}
 
 #elif defined(PRINT_DEBUG_USING_USB) && defined(SEREMU_INTERFACE) && !defined(CDC_STATUS_INTERFACE) && !defined(CDC_DATA_INTERFACE)
 #include "usb_dev.h"
 #include "usb_seremu.h"
-__attribute__((section(".flashmem"), weak)) void putchar_debug(char c)
+FLASHMEM void putchar_debug(char c)
 {
 	usb_seremu_putchar(c);
-}
+}	
 
-__attribute__((section(".flashmem"), weak)) void printf_debug_init(void) {}
+FLASHMEM void printf_debug_init(void) {}
 
 #else
-__attribute__((section(".flashmem"), weak)) void putchar_debug(char c)
+FLASHMEM void putchar_debug(char c)
 {
 	while (!(LPUART3_STAT & LPUART_STAT_TDRE)) ; // wait
 	LPUART3_DATA = c;
 }
 
-__attribute__((section(".flashmem"), weak)) void printf_debug_init(void)
+FLASHMEM void printf_debug_init(void)
 {
         CCM_CCGR0 |= CCM_CCGR0_LPUART3(CCM_CCGR_ON); // turn on Serial4
         IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_06 = 2; // Arduino pin 17
-#if PRINT_DEBUG_STUFF == 2
-        LPUART3_BAUD = LPUART_BAUD_OSR(11) | LPUART_BAUD_SBR(1); // 2 MBaud
-#else
         LPUART3_BAUD = LPUART_BAUD_OSR(25) | LPUART_BAUD_SBR(8); // ~115200 baud
-#endif
         LPUART3_CTRL = LPUART_CTRL_TE;
 }
 #endif

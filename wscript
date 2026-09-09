@@ -78,7 +78,7 @@ def configure(cfg):
 # Build
 # ---------------------------------------------------------------------
 def build(bld):
-    TARGET = bld.path.name
+    TARGET = "freertos-teensy41.elf"
 
     COREPATH = 'teensy4'
     LIBPATH  = 'libs'
@@ -150,9 +150,8 @@ def build(bld):
         if not hasattr(elf, 'link_task'):
             return
 
-        elf_node = elf.link_task.outputs[0]
-        elf_path = elf_node.abspath()
-        hex_path = elf_path.replace('.elf', '.hex')
+        elf_path = elf.link_task.outputs[0].abspath()
+        hex_path = elf_path.replace(".elf", ".hex")
 
         ctx.exec_command(f"{ctx.env.SIZE} {elf_path}")
         ctx.exec_command(
@@ -179,7 +178,7 @@ class upload(Context.Context):
     fun = 'upload'
 
     def execute(self):
-        target = os.path.basename(Context.top_dir)
+        target = "freertos-teensy41.hex"
 
         # HEX path
         hex_file = os.path.join(

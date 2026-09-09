@@ -51,11 +51,16 @@ asm(".global _printf_float"); /**< printf supporting floating point values */
 extern unsigned long _heap_end;
 extern unsigned long _estack;
 extern unsigned long _ebss;
+extern unsigned long _enoinit;
 
 extern volatile uint32_t systick_millis_count;
 extern volatile uint32_t systick_cycle_count;
 extern uint32_t set_arm_clock(uint32_t frequency);
-uint8_t* _g_current_heap_end { reinterpret_cast<uint8_t*>(&_ebss) + 32 };
+// Heap begins after .noinit and the 32-byte MPU stack-overflow trap that
+// immediately follows it (see imxrt1062*.ld and configure_cache() in
+// startup.c) — NOT right after .bss/_ebss, since .noinit holds real static
+// data (e.g. libcsp's buffer/queue pools) between _ebss and _enoinit.
+uint8_t* _g_current_heap_end { reinterpret_cast<uint8_t*>(&_enoinit) + 32 };
 
 
 FLASHMEM __attribute__((weak)) uint8_t get_debug_led_pin() {
@@ -372,7 +377,7 @@ void* _sbrk_r(struct _reent* p_reent, ptrdiff_t incr) {
     void* previous_heap_end { _g_current_heap_end };
 
     if ((reinterpret_cast<uintptr_t>(_g_current_heap_end) + incr >= reinterpret_cast<uintptr_t>(&_estack) - 8'192U)
-        || (reinterpret_cast<uintptr_t>(_g_current_heap_end) + incr < reinterpret_cast<uintptr_t>(&_ebss))) {
+        || (reinterpret_cast<uintptr_t>(_g_current_heap_end) + incr < reinterpret_cast<uintptr_t>(&_enoinit) + 32)) {
         __set_PRIMASK(primask);
 
         EXC_PRINTF(PSTR("_sbrk_r(%d): no mem available.\r\n"), incr);

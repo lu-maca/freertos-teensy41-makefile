@@ -182,12 +182,6 @@ FLASHMEM void yield() {
     }
 #endif // USB_TRIPLE_SERIAL
 
-#if !defined DISABLE_ARDUINO_HWSERIAL
-    // Current workaround until integrate with EventResponder.
-    if (check_flags & YIELD_CHECK_HARDWARE_SERIAL) {
-        HardwareSerialIMXRT::processSerialEventsList();
-    }
-#endif // !DISABLE_ARDUINO_HWSERIAL
 
     running = 0;
     if (check_flags & YIELD_CHECK_EVENT_RESPONDER) {

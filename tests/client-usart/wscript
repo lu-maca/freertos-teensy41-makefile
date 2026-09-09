@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+from waflib import Context
+import os
+import yaml
+
+
+class Project:
+    yml = None
+
+    @staticmethod
+    def init() -> None:
+        with open("project.yml", "r") as f:
+            Project.yml = yaml.safe_load(f)
+
+
+def set_library_opts(opt, lib: dict):
+    for key, val in lib.items():
+        setattr(opt.options, key, val)
+
+    if "includes" in lib:
+        opt.options.includes = lib["includes"]
+
+
+# ---------------------------------------------------------------------
+# Options
+# ---------------------------------------------------------------------
+def options(opt):
+    opt.load('compiler_c')
+    Project.init()
+
+    libs = Project.yml["library_options"]
+    for libname, _ in libs.items():
+        module_path = libname
+        if os.path.exists(os.path.join(module_path, "wscript")):
+            opt.recurse(module_path, mandatory=True, once=True)
+
+
+# ---------------------------------------------------------------------
+# Configure
+# ---------------------------------------------------------------------
+def configure(cfg):
+    # Native host toolchain (this test target builds and runs on Linux,
+    # not on the Teensy4 target).
+    cfg.load('compiler_c')
+
+    libs = Project.yml["library_options"]
+    for libname, libopts in libs.items():
+        module_path = libname
+        if os.path.exists(os.path.join(module_path, "wscript")):
+            set_library_opts(cfg, libopts)
+
+            # project.yml sets with_os to "linux", but that is the name of
+            # the libcsp USART driver (with_driver_usart), not a valid
+            # libcsp OS (only "posix" or "freertos" are). Force the correct
+            # OS here so libcsp builds its posix arch backend for this
+            # native Linux test.
+            cfg.options.with_os = "posix"
+
+            cfg.recurse(module_path, mandatory=True, once=True)
+
+    # set flags
+    cfg.env.append_unique("CFLAGS", Project.yml["flags"] + Project.yml["cflags"])
+    cfg.env.append_unique("DEFINES", Project.yml.get("defines", []))
+
+
+# ---------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------
+def build(bld):
+    TARGET = bld.path.name
+
+    libs = Project.yml["library_options"]
+    uses = []
+    for libname, _ in libs.items():
+        module_path = libname
+        if os.path.exists(os.path.join(module_path, "wscript")):
+            bld.recurse(module_path, mandatory=True, once=True)
+            uses.append(libname.replace("lib", ""))
+
+    bld.program(
+        target   = TARGET,
+        source   = ['main.c'],
+        cflags   = bld.env.CFLAGS,
+        defines  = bld.env.DEFINES,
+        lib      = bld.env.LIBS,
+        use      = uses,
+    )

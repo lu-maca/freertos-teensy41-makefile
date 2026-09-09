@@ -64,6 +64,44 @@ void (* const DmaSerial::allTxIsr[7])() = {
         txCompleteCallback7,
 };
 
+void DmaSerial::rxCompleteCallback1() {dmaSerial1.rxIsr();}
+void DmaSerial::rxCompleteCallback2() {dmaSerial2.rxIsr();}
+void DmaSerial::rxCompleteCallback3() {dmaSerial3.rxIsr();}
+void DmaSerial::rxCompleteCallback4() {dmaSerial4.rxIsr();}
+void DmaSerial::rxCompleteCallback5() {dmaSerial5.rxIsr();}
+void DmaSerial::rxCompleteCallback6() {dmaSerial6.rxIsr();}
+void DmaSerial::rxCompleteCallback7() {dmaSerial7.rxIsr();}
+void (* const DmaSerial::allRxIsr[7])() = {
+        rxCompleteCallback1,
+        rxCompleteCallback2,
+        rxCompleteCallback3,
+        rxCompleteCallback4,
+        rxCompleteCallback5,
+        rxCompleteCallback6,
+        rxCompleteCallback7,
+};
+
+// LPUARTx peripheral IRQ (formerly IRQHandler_SerialN -> HardwareSerialIMXRT::IRQHandler).
+// This is now the ONLY code that runs on LPUART1..LPUART7's own vector; it
+// exists solely to service the IDLE condition, which DMA cannot detect by itself.
+void DmaSerial::uartCompleteCallback1() {dmaSerial1.uartIsr();}
+void DmaSerial::uartCompleteCallback2() {dmaSerial2.uartIsr();}
+void DmaSerial::uartCompleteCallback3() {dmaSerial3.uartIsr();}
+void DmaSerial::uartCompleteCallback4() {dmaSerial4.uartIsr();}
+void DmaSerial::uartCompleteCallback5() {dmaSerial5.uartIsr();}
+void DmaSerial::uartCompleteCallback6() {dmaSerial6.uartIsr();}
+void DmaSerial::uartCompleteCallback7() {dmaSerial7.uartIsr();}
+void (* const DmaSerial::allUartIsr[7])() = {
+        uartCompleteCallback1,
+        uartCompleteCallback2,
+        uartCompleteCallback3,
+        uartCompleteCallback4,
+        uartCompleteCallback5,
+        uartCompleteCallback6,
+        uartCompleteCallback7,
+};
+
+
 DmaSerial::DmaSerial(int serialNo)
     : serialNo(serialNo)
 {
@@ -103,8 +141,14 @@ void DmaSerial::begin(uint32_t baud, uint16_t format) {
         dmaChannelReceive->source(*(uint8_t*)&serialBase->port->DATA);
         dmaChannelReceive->destinationBuffer(rxBuffer, DMA_RX_BUFFER_SIZE);
         dmaChannelReceive->triggerAtHardwareEvent(serialBase->dmaMuxSourceRx);
-        // dmaChannelSend->attachInterrupt(allTxIsr[serialNo - 1]);
-        // dmaChannelSend->interruptAtCompletion();
+        // NOTE: this used to (incorrectly) configure dmaChannelSend here,
+        // which stomped the TX channel's ISR vector with the RX callback
+        // and left the RX channel's own IRQ never attached/enabled.
+        dmaChannelReceive->attachInterrupt(allRxIsr[serialNo - 1]);
+        dmaChannelReceive->interruptAtHalf();       // RX design: half...
+        dmaChannelReceive->interruptAtCompletion();  // ...and complete both notify the RX task
+        // destinationBuffer() wired DLASTSGA for auto-wrap, and we never call
+        // disableOnCompletion() for RX, so this channel free-runs continuously.
         dmaChannelReceive->enable();
     }
 
@@ -159,8 +203,23 @@ void DmaSerial::begin(uint32_t baud, uint16_t format) {
     // disabling FIFO:
     serialBase->port->FIFO &= ~(LPUART_FIFO_TXFE | LPUART_FIFO_RXFE);
 
+    // Attach and enable the LPUARTx peripheral IRQ. This is the vector that
+    // used to belong to IRQHandler_SerialN / HardwareSerialIMXRT::IRQHandler.
+    // uartIsr() only services IDLE here - RIE/TIE are deliberately left OFF
+    // below because RDMAE/TDMAE already move every byte via DMA; leaving
+    // RIE/TIE set as well would fire this same IRQ on every single RX/TX
+    // byte in addition to DMA, on top of whatever else is pending.
+    attachInterruptVector(serialBase->irq, allUartIsr[serialNo - 1]);
+    NVIC_SET_PRIORITY(serialBase->irq, serialBase->irq_priority);
+    NVIC_ENABLE_IRQ(serialBase->irq);
+
     // lets configure up our CTRL register value
-    uint32_t ctrl = CTRL_ENABLE | LPUART_CTRL_RIE | LPUART_CTRL_TIE | LPUART_CTRL_ILIE;
+    // RIE/TIE intentionally omitted: RX/TX data movement is done entirely by
+    // DMA (RDMAE/TDMAE above). ILIE is the only line-status interrupt we need,
+    // serviced by uartIsr(). ORIE is worth adding if you want overrun errors
+    // surfaced instead of silently dropped - not enabled here to match the
+    // original HardwareSerial feature set as closely as possible.
+    uint32_t ctrl = CTRL_ENABLE | LPUART_CTRL_ILIE;
 
     // Now process the bits in the Format value passed in
     // Bits 0-2 - Parity plus 9  bit.
@@ -294,5 +353,42 @@ void DmaSerial::txIsr() {
         transmitting = false;
     }
 }
+
+void DmaSerial::rxIsr() {
+    // Fires for BOTH DMA-half and DMA-complete (interruptAtHalf() +
+    // interruptAtCompletion() both set in begin()). clearInterrupt() clears
+    // the DMA channel's own IRQ-pending flag (DMA_CINT), not the ring buffer
+    // position - the RX task recomputes how much is available on wake via
+    // available()/read(), same as it will after uartIsr()'s IDLE wake.
+    dmaChannelReceive->clearInterrupt();
+    notifyRxTask();
+}
+
+void DmaSerial::uartIsr() {
+    // This is the entire replacement for HardwareSerialIMXRT::IRQHandler()'s
+    // IDLE branch (port->STAT & LPUART_STAT_IDLE, cleared by writing 1 back).
+    // RDRF/TDRE/TC are not read or acted on here - DMA (RDMAE/TDMAE) owns
+    // those, and RIE/TIE/TCIE are left disabled in begin() so this vector
+    // should only ever be entered because of IDLE (or a line error, if you
+    // enable ORIE/FEIE/PEIE/NEIE later - handle those here too if you do).
+    if (serialBase->port->STAT & LPUART_STAT_IDLE) {
+        // STAT is write-1-to-clear for IDLE; |= only ever sets bits that are
+        // already 1 or is a no-op on the read-only status bits, so this can't
+        // accidentally clear a flag we haven't looked at (same pattern as
+        // the old HardwareSerialIMXRT::IRQHandler()).
+        serialBase->port->STAT |= LPUART_STAT_IDLE;
+        notifyRxTask();
+    }
+}
+
+void DmaSerial::notifyRxTask() {
+    BaseType_t higher_priority_task_woken = pdFALSE;
+    vTaskNotifyGiveFromISR(
+        rxTaskHandle,
+        &higher_priority_task_woken
+    );
+    portYIELD_FROM_ISR(higher_priority_task_woken);
+}
+
 
 
